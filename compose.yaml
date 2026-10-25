@@ -1,0 +1,10 @@
+services:
+  api:
+    image: sdist-grupo5-demo:1
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - sqlite-data:/data
+volumes:
+  sqlite-data:
