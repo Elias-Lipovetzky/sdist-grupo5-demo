@@ -4,3 +4,7 @@
 __pycache__
 data
 *.tar
+*.docx
+docs
+tools
+tests

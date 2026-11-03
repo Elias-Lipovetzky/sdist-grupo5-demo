@@ -1,145 +1,204 @@
 # Grupo 5: REST y GraphQL
 
-Demo de terminal con Python 3.13, SQLite y un esquema GraphQL real (graphql-core).
-Ambas APIs consultan la misma base: tres usuarios y cuatro pedidos ficticios.
-Objetivo del cliente: mostrar **nombre de cada usuario, producto y total de sus pedidos**.
-Los importes son enteros en centavos, para evitar errores de punto flotante.
+Demo de terminal con Python 3.13, SQLite, Docker y graphql-core. La misma base contiene tres usuarios y cuatro pedidos. El objetivo es construir una vista con **nombre, producto y total de los pedidos** para comparar contratos, viajes HTTP y acceso a datos.
 
-## Preparar con internet (antes de la clase)
+## Empezar
 
-Instalar Docker con Compose y arrancar su motor (Docker Desktop en Windows).
-En la carpeta del proyecto:
+Con Docker Desktop iniciado, desde la carpeta del proyecto:
 
-```sh
-docker compose build
-docker compose up -d --wait
-docker compose exec api python demo.py all
+```powershell
+docker compose up -d --build --wait
+docker compose exec -T api python demo.py all
 ```
 
-Solo la construccion descarga la imagen base y las dependencias. El servidor y el
-cliente no usan servicios externos. No se necesita Python ni curl en el host.
-El puerto se publica solo en `127.0.0.1:8000`; no queda expuesto a la red de la VM.
+La primera construcción necesita internet. No hace falta instalar Python en el host. El servidor publica únicamente `http://localhost:8000`; SQLite persiste en un volumen.
 
-## Ejecutar sin internet
+## Documentación
 
-Si ya se construyo la imagen en esa maquina:
+- [Tutorial breve de presentación](docs/TUTORIAL.md): dónde ir en el editor, código, explicación y comandos.
+- [Tutorial en Word](docs/Tutorial-presentacion-demo.docx): versión DOCX del mismo manual.
+- [Documento técnico](docs/CONCEPTOS.md): historia, problemas que resuelve cada enfoque, conceptos y límites de la comparación, con fuentes primarias.
+- [Documento técnico en Word](docs/Conceptos-REST-GraphQL.docx).
 
-```sh
-docker compose up -d --no-build --pull never --wait
-docker compose exec api python demo.py rest
-docker compose exec api python demo.py overfetch
-docker compose exec api python demo.py graphql
-docker compose exec api python demo.py nplus1
-```
+## Un comando, un workflow completo
 
-Si se lleva a otra maquina, exportar **antes** con internet:
+Los comandos se mantienen. Cada uno ahora tiene una función independiente en `workflows.py`; la salida muestra objetivo, solicitudes, resultado y costo.
 
-```sh
-docker save -o sdist-demo.tar sdist-grupo5-demo:1
-```
-
-Copiar `sdist-demo.tar` y `compose.yaml` a la VM (misma arquitectura de CPU que la
-maquina que construyo la imagen). Docker y Compose deben estar instalados previamente.
-En la VM, sin internet:
-
-```sh
-docker load -i sdist-demo.tar
-docker compose up -d --no-build --pull never --wait
-docker compose exec api python demo.py all
-```
-
-El cliente esta incluido en la imagen. SQLite se crea automaticamente en el primer
-arranque y persiste en un volumen. `docker compose down` detiene la demo y conserva
-los datos. `docker compose down -v` elimina el volumen: usarlo solo para reiniciar
-los datos de prueba, que se recrean en el siguiente arranque.
-
-## Guion de hasta cinco minutos
-
-Dejar el contenedor listo **antes** de empezar. Ejecutar cada comando por separado
-y explicar el resultado. Las respuestas muestran campos extra deliberadamente;
-las biografias largas hacen visible el costo del over-fetching.
-
-| Tiempo | Comando (despues de `docker compose exec api python demo.py`) | Que explicar |
+| Comando | Función | Qué muestra |
 | --- | --- | --- |
-| 0:00–0:30 | — | Misma SQLite, dos contratos. Solo necesitamos nombre, producto y total. |
-| 0:30–1:30 | `rest` | GET de usuarios no incluye pedidos: under-fetching. Se requieren otros tres GET. Ademas llegan campos sobrantes. |
-| 1:30–2:10 | `overfetch` | Endpoint agregado: un GET, pero devuelve mas campos de los necesarios. |
-| 2:10–3:00 | `graphql` | Una query pide exactamente los campos de la vista. Dos SELECT con carga por lote. |
-| 3:00–4:15 | `nplus1` | Misma query y mismos datos: un request HTTP, pero 1 + 3 SELECT por resolvers ingenuos. Comparar con los dos SELECT anteriores. |
-| 4:15–5:00 | — | Elegir segun clientes y contratos. REST admite endpoints especificos y seleccion de campos; GraphQL exige cuidar resolvers y costo de consultas. |
+| `rest` | `demo_rest` | Usuarios y luego pedidos por usuario: under-fetching y campos sobrantes. |
+| `overfetch` | `demo_overfetch` | Un GET agregado resuelve los viajes, pero trae datos de más. |
+| `graphql` | `demo_graphql` | Campos elegidos por el cliente y pedidos cargados por lote. |
+| `nplus1` | `demo_nplus1` | Misma query con una consulta SQL de pedidos por usuario. |
+| `error` | `demo_error` | Campo inexistente rechazado por el esquema sin ejecutar SQL. |
+| `all` | `demo_all` | Secuencia completa para ensayar. |
 
-Opcional fuera del guion: `docker compose exec api python demo.py error` pide un campo
-inexistente. El esquema lo rechaza antes de ejecutar SQL; revisar `errors` incluso con HTTP 200.
-No hace falta mostrar este caso para cumplir el trade-off: N+1 ya lo demuestra.
+```powershell
+docker compose exec -T api python demo.py rest
+docker compose exec -T api python demo.py overfetch
+docker compose exec -T api python demo.py graphql
+docker compose exec -T api python demo.py nplus1
+docker compose exec -T api python demo.py error
+```
 
-## Resultados y limites de la comparacion
+`-T` desactiva la terminal interactiva; el cliente no solicita entrada. Los textos largos se abrevian solo en pantalla. Para verlos completos:
 
-| Escenario | HTTP | SELECT con estos datos |
+```powershell
+docker compose exec -T api python demo.py rest --full
+```
+
+`--base` después del subcomando cambia la URL del servidor. Ver ayuda:
+
+```powershell
+docker compose exec -T api python demo.py --help
+docker compose exec -T api python demo.py graphql --help
+```
+
+## Cómo seguir el código
+
+```text
+demo.py (parser y handler)
+  -> workflows.py (un recorrido completo por comando)
+  -> demo_client.py (HTTP, impresión y métricas)
+  -> app.py (recibir solicitud HTTP)
+  -> routing.py (encontrar método + URL)
+     -> rest_api.py (handler del recurso)
+     -> graphql_api.py (validar query y ejecutar resolvers)
+  -> database.py (Store y SQLite)
+  -> respuesta JSON -> cliente -> resumen
+```
+
+| Archivo | Responsabilidad | Punto para mostrar |
+| --- | --- | --- |
+| `demo.py` | Parser y despacho | `build_parser`, `set_defaults(handler=...)`, `args.handler(args)` |
+| `workflows.py` | Pasos de cada escenario | `demo_rest`, `demo_graphql`, `demo_nplus1` |
+| `demo_client.py` | Transporte y métricas | `DemoClient.send`, `summary` |
+| `app.py` | Servidor HTTP común | `handle_request` y conexión de las tablas de rutas |
+| `routing.py` | Router pequeño sin framework | `Route`, `Router.dispatch` |
+| `rest_api.py` | Endpoints REST independientes | `REST_ROUTES`, `list_users`, `list_user_orders`, `list_users_with_orders` |
+| `graphql_api.py` | Contrato, resolvers y endpoint | `SCHEMA`, `create_schema`, `execute_query`, ambos `resolve_orders_*` |
+| `database.py` | Base compartida y consultas medidas | `initialize`, `Store.select` |
+
+El router usa una tabla explícita: cada entrada conecta un método y patrón de URL con una función. El bucle de registro del parser solo conecta comandos; no contiene su lógica. Los workflows comparten mecánica HTTP, pero mantienen visibles sus pasos. Los resolvers ingenuo y por lote son funciones separadas; se preparan dos esquemas idénticos para evitar modificar resolvers durante solicitudes concurrentes.
+
+## Resultados esperados
+
+| Escenario | HTTP | SELECT |
 | --- | ---: | ---: |
 | REST por recursos | 4 | 7 |
 | REST agregado | 1 | 2 |
 | GraphQL por lote | 1 | 2 |
 | GraphQL ingenuo | 1 | 4 |
 
-REST por recursos verifica la existencia del usuario antes de consultar sus pedidos,
-por eso cada ruta de pedidos hace dos SELECT. No confundir requests HTTP con consultas SQL.
-`X-SQL-Queries` cuenta SELECT de esa solicitud; GraphQL incluye tambien el SQL en
-`extensions` con fines didacticos.
+Las rutas de pedidos REST verifican primero al usuario, por eso cada una hace dos SELECT. La query compartida está en `workflows.py`:
 
-Los bytes son los cuerpos HTTP UTF-8 reales, sin headers ni compresion. En GraphQL
-incluyen `extensions` de diagnostico, que no son datos solicitados por el cliente.
-No son una prueba de rendimiento: el dataset y las biografias son ilustrativos.
-GraphQL selecciona campos en la respuesta, pero esta implementacion lee filas
-completas de SQLite. La carga por lote lee todos los pedidos, adecuada solo para
-este dataset; en un sistema grande se filtraria por IDs y se agregaria paginacion.
-
-La demo desactiva cache con `Cache-Control: no-store` para repetir mediciones. REST
-permite aprovechar cache HTTP por URL; GraphQL puede usar caches de cliente,
-consultas persistidas y otras estrategias. Aqui no se implementa una comparacion de cache.
-El N+1 depende del acceso a datos: tambien puede aparecer en REST.
-
-## Contratos y endpoints
-
-- `GET /health`: estado del proceso.
-- `GET /api/v1/users`: usuarios completos sin pedidos.
-- `GET /api/v1/users/1`: usuario individual (404 si no existe).
-- `GET /api/v1/users/1/orders`: pedidos del usuario.
-- `GET /api/v1/users-with-orders`: usuarios con pedidos completos.
-- `POST /graphql`: JSON con `query`, opcionalmente `variables` y `operationName`.
-- Header GraphQL `X-Resolver-Mode: naive` o `batched` (predeterminado).
-
-Ejemplo con curl en Linux/macOS (en PowerShell puede usarse el cliente Python):
-
-```sh
-curl -i http://localhost:8000/api/v1/users/999
-curl -i http://localhost:8000/graphql -H 'Content-Type: application/json' --data '{"query":"{ users { name orders { product total_cents } } }"}'
+```graphql
+{ users { name orders { product total_cents } } }
 ```
 
-Solo se implementan lecturas: POST en GraphQL transporta una query, no crea un recurso.
-GET/POST/PUT/DELETE, versionado y contratos se explican en el teorico. `/api/v1`
-ilustra versionado REST; en GraphQL se puede evolucionar el esquema agregando campos
-y deprecando los anteriores, manteniendo compatibilidad. Eso requiere criterio en ambos estilos.
-Servidor didactico para localhost, sin autenticacion ni limites de costo GraphQL.
+`total_cents` expresa centavos. En GraphQL, `data` contiene los campos elegidos y `extensions` añade diagnóstico. `X-SQL-Queries` cuenta los SELECT de cada solicitud. Los bytes son cuerpos HTTP UTF-8, sin headers ni compresión, medidos antes de abreviar. En GraphQL incluyen el diagnóstico; no son un benchmark.
 
-## Desarrollo sin Docker
+REST puede implementar selección de campos o endpoints específicos. GraphQL no optimiza SQL automáticamente: aquí usamos `SELECT *`. La carga por lote lee todos los pedidos y los agrupa; es suficiente para el dataset pequeño, pero un sistema grande necesita filtros y paginación. No usamos DataLoader. Su caché es por solicitud; N+1 también puede aparecer en REST.
 
-Con Python 3.13:
+## Presentar en cinco minutos
 
-```sh
-python -m venv .venv
+| Tiempo | Paso |
+| --- | --- |
+| 0:00 a 0:30 | Presentar la vista y la misma SQLite para ambos estilos. |
+| 0:30 a 1:30 | `rest`: seguir `demo_rest` y la tabla `REST_ROUTES`. |
+| 1:30 a 2:10 | `overfetch`: un GET y campos sobrantes. |
+| 2:10 a 3:00 | `graphql`: mostrar esquema, query y selección de campos. |
+| 3:00 a 4:15 | `nplus1`: comparar ambos resolvers y 4 frente a 2 SELECT. |
+| 4:15 a 5:00 | Explicar cuándo elegir cada enfoque y sus costos. |
+
+Construir y arrancar antes de comenzar. `error` es opcional; `all` sirve para ensayo. Tener una grabación de respaldo.
+
+## Usar sin internet y llevar a la VM
+
+En la misma máquina, con la imagen ya construida:
+
+```powershell
+docker compose up -d --no-build --pull never --wait
 ```
 
-Activar el entorno (`.venv/Scripts/Activate.ps1` en PowerShell o
-`source .venv/bin/activate` en Linux), y luego:
+Para llevar a otra máquina, exportar previamente:
 
-```sh
-python -m pip install -r requirements.txt
-python -m unittest discover -s tests -v
-python app.py
+```powershell
+docker save -o sdist-demo.tar sdist-grupo5-demo:1
 ```
 
-En otra terminal: `python demo.py all`. La instalacion necesita internet una vez;
-la ejecucion no. `DB_PATH` permite cambiar el archivo (por defecto `data/demo.sqlite`).
+Copiar `sdist-demo.tar` y `compose.yaml` a una carpeta de la VM. Docker y Compose deben estar instalados y el motor iniciado; la arquitectura de CPU debe ser compatible con la imagen. Desde esa carpeta:
 
-Referencias: [resolvers de graphql-core](https://graphql-core-3.readthedocs.io/en/stable/usage/resolvers.html)
-y [SQLite en Python](https://docs.python.org/3.13/library/sqlite3.html).
+```powershell
+docker load -i sdist-demo.tar
+docker compose up -d --no-build --pull never --wait
+docker compose exec -T api python demo.py all
+```
+
+Los comandos Docker también sirven en la terminal Linux. El servidor y el cliente no requieren servicios externos durante la ejecución.
+
+## Operación y diagnóstico
+
+```powershell
+docker compose ps
+Invoke-RestMethod http://localhost:8000/health
+docker compose logs --tail 30 api
+docker compose restart api
+docker compose down
+```
+
+`down` detiene el servicio y conserva SQLite. Solo para borrar los datos de prueba y recrearlos al arrancar:
+
+```powershell
+docker compose down -v
+docker compose up -d --no-build --pull never --wait
+```
+
+Si el código cambió, reconstruir con `docker compose up -d --build --wait`; `restart` no incorpora cambios de archivos. Si no conecta al motor, iniciar Docker Desktop. Si el puerto 8000 está ocupado, liberar el puerto o cambiar el puerto del host en `compose.yaml`. El cliente dentro del contenedor sigue usando el 8000 interno.
+
+## Endpoints y consultas manuales en PowerShell
+
+| Método | Ruta | Resultado |
+| --- | --- | --- |
+| GET | `/health` | Proceso disponible |
+| GET | `/api/v1/users` | Usuarios sin pedidos |
+| GET | `/api/v1/users/1` | Usuario individual; 404 si no existe |
+| GET | `/api/v1/users/1/orders` | Pedidos del usuario |
+| GET | `/api/v1/users-with-orders` | Usuarios con pedidos completos |
+| POST | `/graphql` | Query GraphQL |
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/v1/users | ConvertTo-Json -Depth 10
+
+$body = @{ query = '{ users { name orders { product total_cents } } }' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/graphql -Method Post -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod -Uri http://localhost:8000/graphql -Method Post -ContentType 'application/json' -Headers @{ 'X-Resolver-Mode' = 'naive' } -Body $body | ConvertTo-Json -Depth 10
+```
+
+GraphQL acepta `query`, `variables` y `operationName`. El header didáctico `X-Resolver-Mode` selecciona `naive` o `batched` (predeterminado). JSON inválido produce 400; campos GraphQL inválidos generan `errors` con HTTP 200 en esta implementación. Solo hay lecturas: no se implementan POST REST, PUT, DELETE ni mutations.
+
+## Desarrollo y documentación
+
+En PowerShell con Python 3.13 instalado:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe app.py
+```
+
+En otra terminal:
+
+```powershell
+.\.venv\Scripts\python.exe demo.py all
+```
+
+Sin Docker, SQLite se guarda en `data/demo.sqlite`; `DB_PATH` permite cambiar la ubicación. Para regenerar los dos documentos Word desde los Markdown, sin instalar bibliotecas adicionales:
+
+```powershell
+.\.venv\Scripts\python.exe tools/build_docs.py
+```
+
+Cerrar los DOCX en Word antes de regenerarlos. La generación no necesita internet. El servidor es didáctico para localhost: no implementa autenticación, autorización ni límites de complejidad GraphQL. La caché HTTP está desactivada (`no-store`); no se compara caché en esta demo.

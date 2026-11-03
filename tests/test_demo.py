@@ -5,19 +5,21 @@ import threading
 import unittest
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import app
-from demo import QUERY
+import database
+from workflows import QUERY
 
 
 class DemoTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        cls.old_path = app.DB_PATH
-        app.DB_PATH = str(Path(cls.tmp.name) / "test.sqlite")
+        cls.old_path = database.DB_PATH
+        database.DB_PATH = str(Path(cls.tmp.name) / "test.sqlite")
         app.initialize()
         cls.server = app.ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -29,7 +31,7 @@ class DemoTests(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join()
-        app.DB_PATH = cls.old_path
+        database.DB_PATH = cls.old_path
         cls.tmp.cleanup()
 
     def request(self, path, body=None, mode="batched"):
@@ -96,6 +98,54 @@ class DemoTests(unittest.TestCase):
         for label in ("REST", "OVERFETCH", "GRAPHQL", "NPLUS1", "ERROR"):
             self.assertIn(label, result.stdout)
         self.assertIn("4 requests HTTP", result.stdout)
+
+    def test_subcommands_are_independent(self):
+        for command in ("rest", "overfetch", "graphql", "nplus1", "error"):
+            with self.subTest(command=command):
+                result = subprocess.run(
+                    [sys.executable, "demo.py", command, "--base", self.base],
+                    capture_output=True, text=True, encoding="utf-8", timeout=20,
+                    env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("TOTAL:", result.stdout)
+                self.assertIn("1.", result.stdout)
+
+    def test_unknown_routes_and_invalid_mode(self):
+        for path, body, mode, expected in [
+            ("/unknown", None, "batched", 404),
+            ("/api/v1/users/no/orders", None, "batched", 404),
+            ("/api/v1/users/999/orders", None, "batched", 404),
+            ("/graphql", {"query": QUERY}, "invalid", 400),
+        ]:
+            with self.subTest(path=path, mode=mode):
+                with self.assertRaises(HTTPError) as exc:
+                    self.request(path, body, mode)
+                self.assertEqual(exc.exception.code, expected)
+
+    def test_concurrent_modes_do_not_change_other_requests(self):
+        modes = ["naive", "batched"] * 4
+
+        def execute(mode):
+            return mode, self.request("/graphql", {"query": QUERY}, mode)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for mode, (body, count) in pool.map(execute, modes):
+                self.assertEqual(body["extensions"]["resolverMode"], mode)
+                self.assertEqual(count, {"naive": 4, "batched": 2}[mode])
+
+    def test_compact_display_preserves_received_size(self):
+        outputs = []
+        for flags in ([], ["--full"]):
+            result = subprocess.run(
+                [sys.executable, "demo.py", "overfetch", "--base", self.base, *flags],
+                capture_output=True, text=True, encoding="utf-8", timeout=20,
+                env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs.append(result.stdout)
+        summaries = [next(line for line in out.splitlines() if line.startswith("TOTAL:"))
+                     for out in outputs]
+        self.assertEqual(summaries[0], summaries[1])
+        self.assertLess(len(outputs[0]), len(outputs[1]))
 
 
 if __name__ == "__main__":
