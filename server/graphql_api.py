@@ -1,5 +1,5 @@
 from graphql import build_schema, graphql_sync
-from routing import APIError, Route
+from .routing import APIError, Route
 
 SCHEMA = """
     type Query { users: [User!]!, user(id: ID!): User }

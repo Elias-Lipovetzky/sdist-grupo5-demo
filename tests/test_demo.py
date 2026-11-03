@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-import app
-import database
-from workflows import QUERY
+from server import http_server as app
+from server import database
+from client.workflows import QUERY
 
 
 class DemoTests(unittest.TestCase):

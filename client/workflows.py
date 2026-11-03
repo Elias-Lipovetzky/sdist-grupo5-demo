@@ -1,5 +1,5 @@
 """Un workflow completo por comando: abrir una funcion para seguir el escenario."""
-from demo_client import DemoClient, introduction, show_json, stage
+from .demo_client import DemoClient, introduction, show_json, stage
 
 QUERY = "{ users { name orders { product total_cents } } }"
 

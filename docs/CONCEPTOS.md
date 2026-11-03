@@ -40,7 +40,7 @@ Ese origen ayuda a entender su propuesta: dar al cliente una forma de expresar q
 
 ## 6. Esquema, query y resolver
 
-El esquema es el contrato tipado: describe campos, relaciones y argumentos disponibles. En `graphql_api.py`, `Query.users` devuelve `[User!]!`: una lista no nula de usuarios no nulos. Un `User` tiene `orders`, que relaciona usuarios con pedidos. El esquema público no tiene por qué copiar las tablas internas. GraphQL tampoco requiere una base de datos de grafos. [Esquemas y tipos](https://graphql.org/learn/schema/).
+El esquema es el contrato tipado: describe campos, relaciones y argumentos disponibles. En `server/graphql_api.py`, `Query.users` devuelve `[User!]!`: una lista no nula de usuarios no nulos. Un `User` tiene `orders`, que relaciona usuarios con pedidos. El esquema público no tiene por qué copiar las tablas internas. GraphQL tampoco requiere una base de datos de grafos. [Esquemas y tipos](https://graphql.org/learn/schema/).
 
 Una query selecciona campos dentro de ese contrato. Puede anidar relaciones, usar argumentos, variables y aliases. Las operaciones principales son query (lectura), mutation (cambio) y subscription (actualizaciones); esta demo implementa queries únicamente. [Queries](https://graphql.org/learn/queries/).
 
@@ -48,7 +48,7 @@ Una query selecciona campos dentro de ese contrato. Puede anidar relaciones, usa
 { users { name orders { product total_cents } } }
 ```
 
-En el proyecto, `execute_query` valida el cuerpo HTTP y llama a `graphql_sync`. La biblioteca analiza y valida el documento y ejecuta los resolvers. `resolve_users` obtiene usuarios; el resolver de `User.orders` obtiene pedidos. El acceso a la base está en `database.py`. Los campos simples de los diccionarios se resuelven mediante el comportamiento predeterminado de la biblioteca.
+En el proyecto, `execute_query` valida el cuerpo HTTP y llama a `graphql_sync`. La biblioteca analiza y valida el documento y ejecuta los resolvers. `resolve_users` obtiene usuarios; el resolver de `User.orders` obtiene pedidos. El acceso a la base está en `server/database.py`. Los campos simples de los diccionarios se resuelven mediante el comportamiento predeterminado de la biblioteca.
 
 Seleccionar campos de respuesta no significa seleccionar automáticamente columnas SQL: nuestro repositorio usa `SELECT *`. Además, el esquema tipado no reemplaza la autorización. Permitir pedir un campo y permitir verlo a un usuario son decisiones distintas.
 
@@ -83,9 +83,9 @@ La salida abrevia textos largos solo al imprimirlos. Mide bytes antes de hacerlo
 
 ## 10. La arquitectura elegida para explicarlo
 
-El parser de `demo.py` asocia cada subcomando con una función usando `set_defaults(handler=...)`. `args.handler(args)` ejecuta el workflow. En `workflows.py`, cada función conserva el recorrido completo del escenario, mientras `demo_client.py` comparte únicamente HTTP, impresión y métricas.
+El parser de `client/cli.py` asocia cada subcomando con una función usando `set_defaults(handler=...)`. `args.handler(args)` ejecuta el workflow. En `client/workflows.py`, cada función conserva el recorrido completo del escenario, mientras `client/demo_client.py` comparte únicamente HTTP, impresión y métricas.
 
-El servidor recibe HTTP en `app.py` y usa la tabla de `routing.py`. Los handlers REST están en `rest_api.py`; GraphQL reúne esquema, resolvers y ejecución en `graphql_api.py`. Ambos acceden al mismo `Store` de `database.py`. Esta separación permite seguir un comando hasta SQLite sin mezclar decisiones de presentación, transporte y datos.
+El servidor recibe HTTP en `server/http_server.py` y usa la tabla de `server/routing.py`. Los handlers REST están en `server/rest_api.py`; GraphQL reúne esquema, resolvers y ejecución en `server/graphql_api.py`. Ambos acceden al mismo `Store` de `server/database.py`. Esta separación permite seguir un comando hasta SQLite sin mezclar decisiones de presentación, transporte y datos.
 
 Se mantuvo un router pequeño en lugar de agregar un framework para que la tabla de entradas y los handlers fueran visibles. Docker empaqueta el entorno; la imagen se construye con internet una vez y luego puede cargarse en una VM compatible sin conexión. No se agregaron autenticación, paginación ni límites de complejidad; el servidor es didáctico para localhost.
 

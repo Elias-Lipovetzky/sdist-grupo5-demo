@@ -1,4 +1,4 @@
-from routing import APIError, Route
+from .routing import APIError, Route
 
 
 def health(store, body, headers):

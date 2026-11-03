@@ -22,7 +22,7 @@ La primera construcción necesita internet. No hace falta instalar Python en el 
 
 ## Un comando, un workflow completo
 
-Los comandos se mantienen. Cada uno ahora tiene una función independiente en `workflows.py`; la salida muestra objetivo, solicitudes, resultado y costo.
+Los comandos se mantienen. Cada uno ahora tiene una función independiente en `client/workflows.py`; la salida muestra objetivo, solicitudes, resultado y costo.
 
 | Comando | Función | Qué muestra |
 | --- | --- | --- |
@@ -56,28 +56,45 @@ docker compose exec -T api python demo.py graphql --help
 
 ## Cómo seguir el código
 
+El proyecto se organiza por responsabilidad:
+
 ```text
-demo.py (parser y handler)
-  -> workflows.py (un recorrido completo por comando)
-  -> demo_client.py (HTTP, impresión y métricas)
-  -> app.py (recibir solicitud HTTP)
-  -> routing.py (encontrar método + URL)
-     -> rest_api.py (handler del recurso)
-     -> graphql_api.py (validar query y ejecutar resolvers)
-  -> database.py (Store y SQLite)
+server/       Servidor HTTP, rutas REST, esquema GraphQL y SQLite
+client/       Parser, workflows de la demo y cliente HTTP
+docs/         Tutorial y conceptos, en Markdown y Word
+tests/        Pruebas de APIs y comandos
+scripts/      Generación de documentos Word
+app.py        Entrada breve para iniciar el servidor
+demo.py       Entrada breve para ejecutar la demo
+Dockerfile    Construcción de la imagen
+compose.yaml  Servicio, puerto y volumen SQLite
+```
+
+`app.py` y `demo.py` delegan en sus paquetes para conservar los comandos del guion.
+El recorrido de una solicitud es:
+
+```text
+client/cli.py (parser y handler)
+  -> client/workflows.py (un recorrido completo por comando)
+  -> client/demo_client.py (HTTP, impresión y métricas)
+  -> server/http_server.py (recibir solicitud HTTP)
+  -> server/routing.py (encontrar método + URL)
+     -> server/rest_api.py (handler del recurso)
+     -> server/graphql_api.py (validar query y ejecutar resolvers)
+  -> server/database.py (Store y SQLite)
   -> respuesta JSON -> cliente -> resumen
 ```
 
 | Archivo | Responsabilidad | Punto para mostrar |
 | --- | --- | --- |
-| `demo.py` | Parser y despacho | `build_parser`, `set_defaults(handler=...)`, `args.handler(args)` |
-| `workflows.py` | Pasos de cada escenario | `demo_rest`, `demo_graphql`, `demo_nplus1` |
-| `demo_client.py` | Transporte y métricas | `DemoClient.send`, `summary` |
-| `app.py` | Servidor HTTP común | `handle_request` y conexión de las tablas de rutas |
-| `routing.py` | Router pequeño sin framework | `Route`, `Router.dispatch` |
-| `rest_api.py` | Endpoints REST independientes | `REST_ROUTES`, `list_users`, `list_user_orders`, `list_users_with_orders` |
-| `graphql_api.py` | Contrato, resolvers y endpoint | `SCHEMA`, `create_schema`, `execute_query`, ambos `resolve_orders_*` |
-| `database.py` | Base compartida y consultas medidas | `initialize`, `Store.select` |
+| `client/cli.py` | Parser y despacho | `build_parser`, `set_defaults(handler=...)`, `args.handler(args)` |
+| `client/workflows.py` | Pasos de cada escenario | `demo_rest`, `demo_graphql`, `demo_nplus1` |
+| `client/demo_client.py` | Transporte y métricas | `DemoClient.send`, `summary` |
+| `server/http_server.py` | Servidor HTTP común | `handle_request` y conexión de las tablas de rutas |
+| `server/routing.py` | Router pequeño sin framework | `Route`, `Router.dispatch` |
+| `server/rest_api.py` | Endpoints REST independientes | `REST_ROUTES`, `list_users`, `list_user_orders`, `list_users_with_orders` |
+| `server/graphql_api.py` | Contrato, resolvers y endpoint | `SCHEMA`, `create_schema`, `execute_query`, ambos `resolve_orders_*` |
+| `server/database.py` | Base compartida y consultas medidas | `initialize`, `Store.select` |
 
 El router usa una tabla explícita: cada entrada conecta un método y patrón de URL con una función. El bucle de registro del parser solo conecta comandos; no contiene su lógica. Los workflows comparten mecánica HTTP, pero mantienen visibles sus pasos. Los resolvers ingenuo y por lote son funciones separadas; se preparan dos esquemas idénticos para evitar modificar resolvers durante solicitudes concurrentes.
 
@@ -90,7 +107,7 @@ El router usa una tabla explícita: cada entrada conecta un método y patrón de
 | GraphQL por lote | 1 | 2 |
 | GraphQL ingenuo | 1 | 4 |
 
-Las rutas de pedidos REST verifican primero al usuario, por eso cada una hace dos SELECT. La query compartida está en `workflows.py`:
+Las rutas de pedidos REST verifican primero al usuario, por eso cada una hace dos SELECT. La query compartida está en `client/workflows.py`:
 
 ```graphql
 { users { name orders { product total_cents } } }
@@ -198,7 +215,7 @@ En otra terminal:
 Sin Docker, SQLite se guarda en `data/demo.sqlite`; `DB_PATH` permite cambiar la ubicación. Para regenerar los dos documentos Word desde los Markdown, sin instalar bibliotecas adicionales:
 
 ```powershell
-.\.venv\Scripts\python.exe tools/build_docs.py
+.\.venv\Scripts\python.exe scripts/build_docs.py
 ```
 
 Cerrar los DOCX en Word antes de regenerarlos. La generación no necesita internet. El servidor es didáctico para localhost: no implementa autenticación, autorización ni límites de complejidad GraphQL. La caché HTTP está desactivada (`no-store`); no se compara caché en esta demo.

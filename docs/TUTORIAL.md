@@ -21,7 +21,7 @@ Docker incluye servidor, cliente y dependencias para repetir el entorno en la VM
 
 ## 2. REST: seguir un workflow completo
 
-Cómo llegar: abrí `demo.py`, buscá `build_parser` y observá que cada subcomando registra su handler. Luego abrí `workflows.py` y buscá `demo_rest`.
+Cómo llegar: abrí `client/cli.py`, buscá `build_parser` y observá que cada subcomando registra su handler. Luego abrí `client/workflows.py` y buscá `demo_rest`.
 
 ```python
 users = client.get("/api/v1/users")
@@ -37,13 +37,13 @@ docker compose exec -T api python demo.py rest
 
 Señalá los cuatro GET y los siete SELECT. Cada ruta de pedidos verifica primero al usuario y luego consulta sus pedidos: son dos SELECT por ruta.
 
-Cómo llegar al servidor: abrí `rest_api.py`, buscá `REST_ROUTES` y seguí `list_users` o `list_user_orders`. La tabla conecta método y URL con una función; `app.py` delega al router sin decidir cada recurso con un bloque de ifs.
+Cómo llegar al servidor: abrí `server/rest_api.py`, buscá `REST_ROUTES` y seguí `list_users` o `list_user_orders`. La tabla conecta método y URL con una función; `server/http_server.py` delega al router sin decidir cada recurso con un bloque de ifs.
 
 <!-- pagebreak -->
 
 ## 3. REST agregado: menos viajes, campos sobrantes
 
-Cómo llegar: en `workflows.py` buscá `demo_overfetch`; en `rest_api.py`, `list_users_with_orders`.
+Cómo llegar: en `client/workflows.py` buscá `demo_overfetch`; en `server/rest_api.py`, `list_users_with_orders`.
 
 ```python
 users = store.users()
@@ -58,7 +58,7 @@ docker compose exec -T api python demo.py overfetch
 
 ## 4. GraphQL: el cliente elige los campos
 
-Cómo llegar: abrí `graphql_api.py` y buscá `SCHEMA`. Es el contrato: define tipos, campos y relaciones. `!` indica un valor no nulo. Después abrí `workflows.py` y buscá `QUERY` y `demo_graphql`.
+Cómo llegar: abrí `server/graphql_api.py` y buscá `SCHEMA`. Es el contrato: define tipos, campos y relaciones. `!` indica un valor no nulo. Después abrí `client/workflows.py` y buscá `QUERY` y `demo_graphql`.
 
 ```graphql
 { users { name orders { product total_cents } } }
@@ -78,7 +78,7 @@ Cómo seguir la ejecución: `GRAPHQL_ROUTES` conduce a `execute_query`; `graphql
 
 ## 5. N+1: una query puede ejecutar muchos SELECT
 
-Cómo llegar: en `workflows.py` buscá `demo_nplus1`; en `graphql_api.py`, compará `resolve_orders_naive` y `resolve_orders_batched`.
+Cómo llegar: en `client/workflows.py` buscá `demo_nplus1`; en `server/graphql_api.py`, compará `resolve_orders_naive` y `resolve_orders_batched`.
 
 ```python
 def resolve_orders_naive(user, info):
